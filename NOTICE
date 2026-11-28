@@ -1,0 +1,26 @@
+JMCL
+====
+
+JMCL is a modified version adapted from Hello Minecraft! Launcher (HMCL).
+
+Original project: https://github.com/HMCL-dev/HMCL
+Original copyright: Copyright (C) 2021 huangyuhui <huanghongxun2008@126.com> and contributors
+License: GNU General Public License, version 3 (see LICENSE)
+License text: https://www.gnu.org/licenses/gpl-3.0.html
+Source code of this modified version: https://github.com/xiesinian/JMCL
+
+This program is adapted from HMCL. The user-visible name and some texts have
+been changed, and extra features have been added. All modified source files
+retain their original copyright and license headers. Newly added files are
+licensed under the GNU General Public License v3 as well.
+
+The complete source code of this modified version is available in the repository
+that contains this NOTICE file. When distributing binaries, please distribute
+the corresponding source code as required by the GPL.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+JMCL is not affiliated with Mojang Studios or Microsoft.
+"Minecraft" is a trademark of Mojang Synergies AB.

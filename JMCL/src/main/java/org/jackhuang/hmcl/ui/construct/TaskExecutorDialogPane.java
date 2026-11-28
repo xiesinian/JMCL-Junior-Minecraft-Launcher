@@ -1,0 +1,193 @@
+/*
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2021  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.jackhuang.hmcl.ui.construct;
+
+import com.jfoenix.controls.JFXButton;
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.application.Platform;
+import javafx.beans.property.StringProperty;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.util.Duration;
+import org.jackhuang.hmcl.task.*;
+import org.jackhuang.hmcl.ui.FXUtils;
+import org.jackhuang.hmcl.ui.ProgressBarMode;
+import org.jackhuang.hmcl.util.TaskCancellationAction;
+import org.jackhuang.hmcl.util.i18n.I18n;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.function.Consumer;
+
+import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
+import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
+
+public class TaskExecutorDialogPane extends BorderPane {
+    private TaskExecutor executor;
+    private TaskCancellationAction onCancel;
+    @SuppressWarnings({"unused", "FieldCanBeLocal"})
+    private final Consumer<FetchTask.SpeedEvent> speedEventHandler;
+
+    private final Label lblTitle;
+    private final Label lblProgress;
+    private final JFXButton btnCancel;
+    private final TaskListPane taskListPane;
+    private final Label lblCurrentTask;
+    private final Label lblBug;
+    private final Timeline bugTimeline;
+
+    /// The simplified progress bar used instead of the task list, or `null` in the normal mode.
+    private final ProgressBar progressBar;
+
+    public TaskExecutorDialogPane(@NotNull TaskCancellationAction cancel) {
+        this.getStyleClass().add("task-executor-dialog-layout");
+
+        FXUtils.setLimitWidth(this, 500);
+        FXUtils.setLimitHeight(this, 300);
+
+        VBox center = new VBox();
+        this.setCenter(center);
+        center.setPadding(new Insets(16));
+        if (ProgressBarMode.isEnabled()) {
+            lblTitle = new Label();
+            lblTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: BOLD;");
+
+            lblCurrentTask = new Label();
+            lblCurrentTask.setWrapText(true);
+
+            progressBar = new ProgressBar();
+            progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+            progressBar.setMaxWidth(Double.MAX_VALUE);
+
+            lblBug = new Label(ProgressBarMode.randomBug());
+            lblBug.setWrapText(true);
+            lblBug.setStyle("-fx-opacity: 0.75;");
+
+            VBox.setMargin(progressBar, new Insets(6, 0, 6, 0));
+
+            center.setAlignment(Pos.CENTER_LEFT);
+            center.getChildren().setAll(lblTitle, lblCurrentTask, progressBar, lblBug);
+
+            taskListPane = null;
+
+            bugTimeline = new Timeline(new KeyFrame(Duration.seconds(4),
+                    event -> lblBug.setText(ProgressBarMode.randomBug())));
+            bugTimeline.setCycleCount(Animation.INDEFINITE);
+            bugTimeline.play();
+            addEventHandler(DialogCloseEvent.CLOSE, event -> bugTimeline.stop());
+        } else {
+            lblTitle = new Label();
+            lblTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: BOLD;");
+
+            lblCurrentTask = null;
+            lblBug = null;
+            progressBar = null;
+            bugTimeline = null;
+
+            taskListPane = new TaskListPane();
+            VBox.setVgrow(taskListPane, Priority.ALWAYS);
+
+            center.getChildren().setAll(lblTitle, taskListPane);
+        }
+
+        BorderPane bottom = new BorderPane();
+        this.setBottom(bottom);
+        bottom.setPadding(new Insets(0, 8, 8, 8));
+        {
+            lblProgress = new Label();
+            bottom.setLeft(lblProgress);
+
+            btnCancel = new JFXButton(i18n("button.cancel"));
+            btnCancel.getStyleClass().add("dialog-cancel");
+            bottom.setRight(btnCancel);
+        }
+
+        setCancel(cancel);
+
+        btnCancel.setDisable(onCancel.getCancellationAction() == null);
+        btnCancel.setOnAction(e -> {
+            if (executor != null)
+                executor.cancel();
+            onCancel.getCancellationAction().accept(this);
+        });
+
+        speedEventHandler = FetchTask.SPEED_EVENT.registerWeak(speedEvent -> {
+            String message = I18n.formatSpeed(speedEvent.getSpeed());
+            Platform.runLater(() -> lblProgress.setText(message));
+        });
+
+        onEscPressed(this, btnCancel::fire);
+    }
+
+    public void setExecutor(TaskExecutor executor) {
+        setExecutor(executor, true);
+    }
+
+    public void setExecutor(TaskExecutor executor, boolean autoClose) {
+        this.executor = executor;
+
+        if (executor != null) {
+            if (taskListPane != null) {
+                taskListPane.setExecutor(executor);
+            } else {
+                executor.addTaskListener(new TaskListener() {
+                    @Override
+                    public void onRunning(Task<?> task) {
+                        String name = task.getName();
+                        if (name != null && lblCurrentTask != null) {
+                            Platform.runLater(() -> lblCurrentTask.setText(name));
+                        }
+                    }
+                });
+            }
+
+            if (autoClose)
+                executor.addTaskListener(new TaskListener() {
+                    @Override
+                    public void onStop(boolean success, TaskExecutor executor) {
+                        Platform.runLater(() -> fireEvent(new DialogCloseEvent()));
+                    }
+                });
+        }
+    }
+
+    public StringProperty titleProperty() {
+        return lblTitle.textProperty();
+    }
+
+    public String getTitle() {
+        return lblTitle.getText();
+    }
+
+    public void setTitle(String currentState) {
+        lblTitle.setText(currentState);
+    }
+
+    public void setCancel(TaskCancellationAction onCancel) {
+        this.onCancel = onCancel;
+
+        runInFX(() -> btnCancel.setDisable(onCancel == null));
+    }
+}
